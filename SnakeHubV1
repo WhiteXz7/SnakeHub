@@ -1,0 +1,661 @@
+-- [[ =================================================== ]] --
+-- [[       SNAKEHUB - REALISTIC STREET SOCCER (RSS)     ]] --
+-- [[         RAYFIELD UI - MATRIX PRO PLAYER SUITE      ]] --
+-- [[ =================================================== ]] --
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- [[ CARREGAMENTO RAYFIELD COM BYPASS ]] --
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- [[ MAPEAMENTO DINÂMICO DE REMOTES ]] --
+local RS = ReplicatedStorage:WaitForChild("ReplicatedStorage")
+local Remotes = RS:WaitForChild("Remotes")
+
+local RemotesMap = {
+    Shoot = Remotes:FindFirstChild("ShootTheBall") or Remotes:FindFirstChild("ShootTheBaII"),
+    Tackle = Remotes:FindFirstChild("Tackle"),
+    GKHitbox = Remotes:FindFirstChild("GKHitbox"),
+    Action = Remotes:FindFirstChild("Action"),
+    CurveFactor = Remotes:FindFirstChild("cfactor"),
+    Pass = Remotes:FindFirstChild("Pass"),
+    Faceoff = Remotes:FindFirstChild("Faceoff"),
+    Penalty = Remotes:FindFirstChild("Penalty"),
+    Equip = Remotes:FindFirstChild("Equip"),
+    Unbox = Remotes:FindFirstChild("Unbox"),
+    Collect = Remotes:FindFirstChild("Collect") or Remotes:FindFirstChild("tcelloc"),
+    AFK = Remotes:FindFirstChild("AFKRemote"),
+    Shake = Remotes:FindFirstChild("Shake"),
+    Cutscene = Remotes:FindFirstChild("CutsceneRemote"),
+    WQuest = Remotes:FindFirstChild("WQuest"),
+    DailyReward = RS:FindFirstChild("DailyRewardEvents") and RS.DailyRewardEvents:FindFirstChild("ClaimReward"),
+    RedeemCode = RS:FindFirstChild("RedeemCode"),
+    SpeedRemote = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild("Stamina") and LocalPlayer.PlayerGui.Stamina:FindFirstChild("Frame") and LocalPlayer.PlayerGui.Stamina.Frame:FindFirstChild("Speed"),
+    WorldCupClaim = Remotes:FindFirstChild("GetWorldCupClaims"),
+    Spinners = {
+        Cards = RS:FindFirstChild("SpinnerContentsCards") and RS.SpinnerContentsCards:FindFirstChild("RemoteFunction"),
+        Dribble = RS:FindFirstChild("SpinnerContentsDribble") and RS.SpinnerContentsDribble:FindFirstChild("RemoteFunction"),
+        Goalie = RS:FindFirstChild("SpinnerContentsGoalie") and RS.SpinnerContentsGoalie:FindFirstChild("RemoteFunction"),
+        Shoes = RS:FindFirstChild("SpinnerContentsShoes") and RS.SpinnerContentsShoes:FindFirstChild("RemoteFunction")
+    }
+}
+
+-- [[ TABELA DE CONFIGURAÇÕES GLOBAIS ]] --
+local Settings = {
+    -- Auto Shoot
+    AutoShoot = false,
+    ShootDist = 65,
+    Power = 85,
+    Accuracy = 99,
+    CurveShoot = true,
+    CurveIntensity = 0.65,
+    ShootMode = "Gaveta (Superior)", -- Gaveta (Superior), Rasteiro, Meio-Canto
+    
+    -- Auto Dribble
+    AutoDribble = false,
+    DribbleDist = 6.0,
+    DribbleReaction = 0.06, -- Segundos (Humanized delay)
+
+    -- Auto Tackle
+    AutoTackle = false,
+    TackleDist = 5.2,
+    
+    -- Goalkeeper
+    AutoGK = false,
+    GKRange = 35,
+    AutoPenaltySave = false,
+
+    -- Passes & Gameplay
+    AutoPass = false,
+    AutoFaceoff = false,
+    
+    -- Misc & Exploits
+    InfiniteStamina = false,
+    NoCamShake = false,
+    AntiAFK = true,
+    AutoCollectCoins = false,
+    SkipCelebration = false,
+    FPSBoost = false
+}
+
+-- [[ FUNÇÕES AUXILIARES / DETECÇÃO ]] --
+
+local function getBall()
+    for _, item in pairs(workspace:GetDescendants()) do
+        if (item.Name == "Ball" or item.Name == "Football" or item.Name:lower():find("ball")) and item:IsA("BasePart") then
+            return item
+        end
+    end
+    return nil
+end
+
+local function isBallNearMe(radius)
+    local char = LocalPlayer.Character
+    local ball = getBall()
+    if char and char:FindFirstChild("HumanoidRootPart") and ball then
+        return (char.HumanoidRootPart.Position - ball.Position).Magnitude <= (radius or 4)
+    end
+    return false
+end
+
+local function getClosestEnemy(distLimit)
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil, math.huge end
+    local myPos = char.HumanoidRootPart.Position
+    local nearest, nearestDist = nil, distLimit or math.huge
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and (p.Team == nil or p.Team ~= LocalPlayer.Team) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local d = (p.Character.HumanoidRootPart.Position - myPos).Magnitude
+            if d < nearestDist then
+                nearestDist = d
+                nearest = p.Character
+            end
+        end
+    end
+    return nearest, nearestDist
+end
+
+local function getSmartGoalPosition()
+    local bestGoalPos = nil
+    local maxDist = 0
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return Vector3.new() end
+
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if (obj.Name:lower():find("goal") or obj.Name:lower():find("net") or obj.Name:lower():find("trave")) and obj:IsA("BasePart") then
+            local dist = (obj.Position - char.HumanoidRootPart.Position).Magnitude
+            if dist > maxDist and dist < 260 then
+                maxDist = dist
+                bestGoalPos = obj.Position
+            end
+        end
+    end
+
+    if not bestGoalPos then
+        return Camera.CFrame.Position + (Camera.CFrame.LookVector * 120)
+    end
+
+    -- Offset estratégico (Canto morto/Gaveta)
+    local yOffset = 5.5
+    if Settings.ShootMode == "Rasteiro" then
+        yOffset = 1.0
+    elseif Settings.ShootMode == "Gaveta (Superior)" then
+        yOffset = 6.2
+    end
+
+    local xOffset = (math.random() > 0.5 and 7.5 or -7.5)
+    return bestGoalPos + Vector3.new(xOffset, yOffset, 0)
+end
+
+-- [[ CRIAÇÃO DA JANELA RAYFIELD (TEMA MATRIX) ]] --
+
+local Window = Rayfield:CreateWindow({
+    Name = "⚡ SnakeHub | Realistic Street Soccer [MATRIX]",
+    LoadingTitle = "SNAKEHUB MATRIX INITIATING...",
+    LoadingSubtitle = "Top 1 Global Legit Suite",
+    ConfigurationSaving = {
+        Enabled = false
+    },
+    Discord = {
+        Enabled = false
+    },
+    KeySystem = false
+})
+
+-- [[ ABAS ]] --
+local TabCombat = Window:CreateTab("⚽ Combate & Chute", 4483362458)
+local TabDef = Window:CreateTab("🛡️ Drible & Defesa", 4483362458)
+local TabGK = Window:CreateTab("🧤 Goleiro (GK)", 4483362458)
+local TabItems = Window:CreateTab("🔓 Itens & Unlocks", 4483362458)
+local TabPlayer = Window:CreateTab("⚡ Jogador & Exploits", 4483362458)
+
+-- ====================================================================
+-- ABA 1: COMBATE & CHUTE
+-- ====================================================================
+
+TabCombat:CreateToggle({
+    Name = "Auto Shoot (99% Precisão Legit)",
+    CurrentValue = false,
+    Flag = "AutoShootToggle",
+    Callback = function(v)
+        Settings.AutoShoot = v
+    end,
+})
+
+TabCombat:CreateDropdown({
+    Name = "Posicionamento do Chute",
+    Options = {"Gaveta (Superior)", "Rasteiro", "Meio-Canto"},
+    CurrentOption = "Gaveta (Superior)",
+    Flag = "ShootTargetDrop",
+    Callback = function(opt)
+        Settings.ShootMode = opt
+    end,
+})
+
+TabCombat:CreateSlider({
+    Name = "Distância Máxima de Chute (Studs)",
+    Range = {20, 150},
+    Increment = 1,
+    Suffix = " Studs",
+    CurrentValue = 65,
+    Flag = "DistSlider",
+    Callback = function(v)
+        Settings.ShootDist = v
+    end,
+})
+
+TabCombat:CreateSlider({
+    Name = "Força do Chute (Power)",
+    Range = {40, 100},
+    Increment = 1,
+    Suffix = " %",
+    CurrentValue = 85,
+    Flag = "PowerSlider",
+    Callback = function(v)
+        Settings.Power = v
+    end,
+})
+
+TabCombat:CreateToggle({
+    Name = "Curve Shoot (Curva Natural)",
+    CurrentValue = true,
+    Flag = "CurveToggle",
+    Callback = function(v)
+        Settings.CurveShoot = v
+    end,
+})
+
+TabCombat:CreateSlider({
+    Name = "Intensidade da Curva",
+    Range = {0.1, 1.5},
+    Increment = 0.05,
+    Suffix = " Factor",
+    CurrentValue = 0.65,
+    Flag = "CurveFactorSlider",
+    Callback = function(v)
+        Settings.CurveIntensity = v
+    end,
+})
+
+TabCombat:CreateToggle({
+    Name = "Auto Faceoff (Garantir Posse no Kickoff)",
+    CurrentValue = false,
+    Flag = "FaceoffToggle",
+    Callback = function(v)
+        Settings.AutoFaceoff = v
+    end,
+})
+
+TabCombat:CreateToggle({
+    Name = "Auto Pass Magnético (Passe Pro)",
+    CurrentValue = false,
+    Flag = "AutoPassToggle",
+    Callback = function(v)
+        Settings.AutoPass = v
+    end,
+})
+
+-- ====================================================================
+-- ABA 2: DRIBLE & DEFESA
+-- ====================================================================
+
+TabDef:CreateToggle({
+    Name = "Auto Dribble (Anti-Bote 99%)",
+    CurrentValue = false,
+    Flag = "AutoDribbleToggle",
+    Callback = function(v)
+        Settings.AutoDribble = v
+    end,
+})
+
+TabDef:CreateSlider({
+    Name = "Distância de Ativação do Drible",
+    Range = {3, 10},
+    Increment = 0.5,
+    Suffix = " Studs",
+    CurrentValue = 6.0,
+    Flag = "DribbleDistSlider",
+    Callback = function(v)
+        Settings.DribbleDist = v
+    end,
+})
+
+TabDef:CreateToggle({
+    Name = "Auto Tackle (Bote no Tempo Limpo)",
+    CurrentValue = false,
+    Flag = "AutoTackleToggle",
+    Callback = function(v)
+        Settings.AutoTackle = v
+    end,
+})
+
+TabDef:CreateSlider({
+    Name = "Distância do Tackle",
+    Range = {2.5, 8},
+    Increment = 0.5,
+    Suffix = " Studs",
+    CurrentValue = 5.2,
+    Flag = "TackleDistSlider",
+    Callback = function(v)
+        Settings.TackleDist = v
+    end,
+})
+
+-- ====================================================================
+-- ABA 3: GOLEIRO (GK)
+-- ====================================================================
+
+TabGK:CreateToggle({
+    Name = "Auto GK (Defesas & Mergulhos Automáticos)",
+    CurrentValue = false,
+    Flag = "AutoGKToggle",
+    Callback = function(v)
+        Settings.AutoGK = v
+    end,
+})
+
+TabGK:CreateSlider({
+    Name = "Alcance de Reação do Goleiro",
+    Range = {15, 60},
+    Increment = 1,
+    Suffix = " Studs",
+    CurrentValue = 35,
+    Flag = "GKRangeSlider",
+    Callback = function(v)
+        Settings.GKRange = v
+    end,
+})
+
+TabGK:CreateToggle({
+    Name = "Auto Penalty Saver (Defender Penalidades)",
+    CurrentValue = false,
+    Flag = "PenaltySaveToggle",
+    Callback = function(v)
+        Settings.AutoPenaltySave = v
+    end,
+})
+
+TabGK:CreateButton({
+    Name = "Expandir Hitbox de Goleiro Manualmente",
+    Callback = function()
+        pcall(function()
+            if RemotesMap.GKHitbox then
+                RemotesMap.GKHitbox:FireServer(Vector3.new(9999, 9999, 9999))
+                Rayfield:Notify({Title = "SnakeHub", Content = "Hitbox de GK expandida com sucesso!", Duration = 2})
+            end
+        end)
+    end,
+})
+
+-- ====================================================================
+-- ABA 4: ITENS & UNLOCKS
+-- ====================================================================
+
+TabItems:CreateButton({
+    Name = "Desbloquear Todos os Cosméticos (Cards/Sapatos/Dribles)",
+    Callback = function()
+        pcall(function()
+            for name, remote in pairs(RemotesMap.Spinners) do
+                if remote then
+                    remote:InvokeServer("UnlockAll")
+                    remote:InvokeServer("GetAll")
+                end
+            end
+            Rayfield:Notify({Title = "SnakeHub", Content = "Inventário sincronizado com todos os itens locais!", Duration = 3})
+        end)
+    end,
+})
+
+TabItems:CreateButton({
+    Name = "Resgatar Recompensas da Copa (World Cup Cards)",
+    Callback = function()
+        pcall(function()
+            if RemotesMap.WorldCupClaim then
+                RemotesMap.WorldCupClaim:InvokeServer()
+            end
+            local redeemWC = Remotes:FindFirstChild("RedeemWorldCupCard")
+            if redeemWC then
+                for i = 1, 10 do
+                    redeemWC:InvokeServer(i)
+                end
+            end
+            Rayfield:Notify({Title = "SnakeHub", Content = "Cards e Recompensas resgatados!", Duration = 3})
+        end)
+    end,
+})
+
+TabItems:CreateButton({
+    Name = "Auto Resgatar Todos os Códigos Ativos",
+    Callback = function()
+        pcall(function()
+            local codes = {"RELEASE", "SOCCER", "STREET", "2024", "GOAL", "FOOTBALL", "WORLD", "CUP"}
+            if RemotesMap.RedeemCode then
+                for _, code in ipairs(codes) do
+                    RemotesMap.RedeemCode:InvokeServer(code)
+                    task.wait(0.2)
+                end
+            end
+            Rayfield:Notify({Title = "SnakeHub", Content = "Tentativa de resgate de códigos finalizada!", Duration = 3})
+        end)
+    end,
+})
+
+TabItems:CreateButton({
+    Name = "Auto Coletar Recompensa Diária & Missões",
+    Callback = function()
+        pcall(function()
+            if RemotesMap.DailyReward then RemotesMap.DailyReward:FireServer() end
+            if RemotesMap.WQuest then RemotesMap.WQuest:FireServer("ClaimAll") end
+            Rayfield:Notify({Title = "SnakeHub", Content = "Diárias e Quests Coletadas!", Duration = 2.5})
+        end)
+    end,
+})
+
+-- ====================================================================
+-- ABA 5: JOGADOR & EXPLOITS
+-- ====================================================================
+
+TabPlayer:CreateToggle({
+    Name = "Stamina Infinita (Bypass de Velocidade)",
+    CurrentValue = false,
+    Flag = "InfStaminaToggle",
+    Callback = function(v)
+        Settings.InfiniteStamina = v
+    end,
+})
+
+TabPlayer:CreateToggle({
+    Name = "Remover Balanço da Tela (No Cam Shake)",
+    CurrentValue = false,
+    Flag = "NoShakeToggle",
+    Callback = function(v)
+        Settings.NoCamShake = v
+    end,
+})
+
+TabPlayer:CreateToggle({
+    Name = "Pular Comemorações & Cutscenes",
+    CurrentValue = false,
+    Flag = "SkipCutsceneToggle",
+    Callback = function(v)
+        Settings.SkipCelebration = v
+    end,
+})
+
+TabPlayer:CreateToggle({
+    Name = "Auto Coletar Drops de Moedas no Campo",
+    CurrentValue = false,
+    Flag = "AutoCollectToggle",
+    Callback = function(v)
+        Settings.AutoCollectCoins = v
+    end,
+})
+
+TabPlayer:CreateToggle({
+    Name = "Anti-AFK (Evitar Desconexão)",
+    CurrentValue = true,
+    Flag = "AntiAFKToggle",
+    Callback = function(v)
+        Settings.AntiAFK = v
+    end,
+})
+
+TabPlayer:CreateButton({
+    Name = "Ativar Otimizador de FPS (Boost Delta Mobile)",
+    Callback = function()
+        pcall(function()
+            local fpsNoRe = Remotes:FindFirstChild("FPSNORE")
+            if fpsNoRe then fpsNoRe:FireServer(true) end
+            
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("Decal") or obj:IsA("Texture") then
+                    obj.Transparency = 1
+                end
+            end
+            Rayfield:Notify({Title = "SnakeHub", Content = "FPS Otimizado!", Duration = 2})
+        end)
+    end,
+})
+
+-- ====================================================================
+-- CORE LOOPS (EXECUÇÃO PRO LEVEL)
+-- ====================================================================
+
+local Debounces = {Shoot = false, Dribble = false, Tackle = false, GK = false, Pass = false}
+
+-- Loop Rápido (Heartbeat) para Combate
+RunService.Heartbeat:Connect(function()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local ball = getBall()
+
+    -- 1. AUTO SHOOT
+    if Settings.AutoShoot and not Debounces.Shoot and ball and isBallNearMe(4.5) then
+        local targetGoal = getSmartGoalPosition()
+        local dist = (targetGoal - char.HumanoidRootPart.Position).Magnitude
+        
+        if dist <= Settings.ShootDist then
+            Debounces.Shoot = true
+            task.wait(0.06) -- Delay humanizado de reação
+
+            if Settings.CurveShoot and RemotesMap.CurveFactor then
+                pcall(function()
+                    local dir = (math.random() > 0.5 and 1 or -1) * Settings.CurveIntensity
+                    RemotesMap.CurveFactor:FireServer(dir)
+                end)
+            end
+
+            if RemotesMap.Shoot then
+                pcall(function()
+                    -- Precisão Pro Player 99%
+                    local offsetFactor = (100 - Settings.Accuracy) / 100
+                    local microVariation = Vector3.new(
+                        (math.random() - 0.5) * offsetFactor * 3,
+                        (math.random() - 0.5) * offsetFactor * 2,
+                        0
+                    )
+                    RemotesMap.Shoot:FireServer(targetGoal + microVariation, Settings.Power)
+                end)
+            end
+
+            task.wait(0.65)
+            Debounces.Shoot = false
+        end
+    end
+
+    -- 2. AUTO DRIBBLE (ANTI-TACKLE INTELIGENTE)
+    if Settings.AutoDribble and not Debounces.Dribble and ball and isBallNearMe(4.2) then
+        local enemy, enemyDist = getClosestEnemy(Settings.DribbleDist)
+        if enemy and enemy:FindFirstChild("HumanoidRootPart") then
+            local enemyVel = enemy.HumanoidRootPart.Velocity.Magnitude
+            -- Se o adversário correu ou deu slide na sua direção
+            if enemyDist <= Settings.DribbleDist and enemyVel > 7 then
+                Debounces.Dribble = true
+                task.wait(Settings.DribbleReaction)
+
+                if RemotesMap.Action then
+                    pcall(function()
+                        RemotesMap.Action:FireServer("Dribble", math.random(1, 3))
+                    end)
+                end
+
+                -- Corte de corpo lateral suave (estilo Top Global)
+                local sideStep = char.HumanoidRootPart.CFrame.RightVector * (math.random() > 0.5 and 10 or -10)
+                char.HumanoidRootPart.Velocity = char.HumanoidRootPart.Velocity + sideStep
+
+                task.wait(0.85)
+                Debounces.Dribble = false
+            end
+        end
+    end
+
+    -- 3. AUTO TACKLE
+    if Settings.AutoTackle and not Debounces.Tackle and ball and not isBallNearMe(2.8) then
+        local enemy, enemyDist = getClosestEnemy(Settings.TackleDist)
+        if enemy and enemyDist <= Settings.TackleDist then
+            local ballToEnemy = (ball.Position - enemy.HumanoidRootPart.Position).Magnitude
+            if ballToEnemy <= 4.0 then
+                Debounces.Tackle = true
+                task.wait(0.05)
+                
+                if RemotesMap.Tackle then
+                    pcall(function()
+                        RemotesMap.Tackle:FireServer()
+                    end)
+                end
+
+                task.wait(0.55)
+                Debounces.Tackle = false
+            end
+        end
+    end
+
+    -- 4. AUTO GK
+    if Settings.AutoGK and not Debounces.GK and ball then
+        local ballDist = (ball.Position - char.HumanoidRootPart.Position).Magnitude
+        if ballDist <= Settings.GKRange and ball.Velocity.Magnitude > 22 then
+            local toPlayerDir = (char.HumanoidRootPart.Position - ball.Position).Unit
+            if ball.Velocity.Unit:Dot(toPlayerDir) > 0.45 then
+                Debounces.GK = true
+                
+                if RemotesMap.GKHitbox then
+                    pcall(function()
+                        RemotesMap.GKHitbox:FireServer(ball.Position)
+                    end)
+                end
+
+                if RemotesMap.Action then
+                    pcall(function()
+                        local side = (ball.Position - char.HumanoidRootPart.Position).X > 0 and "Right" or "Left"
+                        RemotesMap.Action:FireServer("GKDive", side)
+                    end)
+                end
+
+                task.wait(1.1)
+                Debounces.GK = false
+            end
+        end
+    end
+end)
+
+-- Loop Secundário (Stamina, Drops, Anti-AFK)
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        -- Infinite Stamina
+        if Settings.InfiniteStamina and RemotesMap.SpeedRemote then
+            pcall(function()
+                RemotesMap.SpeedRemote:FireServer(true, 100)
+            end)
+        end
+
+        -- Coletor de Moedas pelo mapa
+        if Settings.AutoCollectCoins and RemotesMap.Collect then
+            pcall(function()
+                for _, obj in pairs(workspace:GetChildren()) do
+                    if obj.Name:find("Coin") or obj.Name:find("Token") then
+                        RemotesMap.Collect:FireServer(obj)
+                    end
+                end
+            end)
+        end
+
+        -- Skip Cuts/Celebrations
+        if Settings.SkipCelebration and RemotesMap.Cutscene then
+            pcall(function()
+                RemotesMap.Cutscene:FireServer("Skip")
+            end)
+        end
+
+        -- Anti-AFK Remote
+        if Settings.AntiAFK and RemotesMap.AFK then
+            pcall(function()
+                RemotesMap.AFK:FireServer(false)
+            end)
+        end
+    end
+end)
+
+-- Bypass de Desconexão por Ociosidade (Roblox Idled Event)
+LocalPlayer.Idled:Connect(function()
+    if Settings.AntiAFK then
+        VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+    end
+end)
+
+-- Notificação Inicial
+Rayfield:Notify({
+    Title = "🐍 SnakeHub Carregado!",
+    Content = "Modo Top 1 Global pronto para uso.",
+    Duration = 4,
+    Image = 4483362458
+})
