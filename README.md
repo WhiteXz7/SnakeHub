@@ -22,9 +22,9 @@ Abra o arquivo [`SnakeHubV3.lua`](SnakeHubV3.lua), copie tudo, cole no executor 
 
 1. O **Detector automático do Explorer** inicia sozinho e indexa os objetos visíveis ao cliente; aperte **DIAGNÓSTICO** para ver o resultado
 2. Se a bola não for encontrada: fique perto dela e aperte **TRAVAR BOLA**
-3. Para reescanear após o campo carregar: aba **Início** → **DETECTAR TUDO DO EXPLORER**
-4. Fique **parado com a bola no pé** → aba **Auto Shoot** → **CALIBRAR CHUTE** (1 vez só)
-5. Ative **TOP 1 GLOBAL** e jogue
+3. No **Delta**, o padrão é **VIM somente**: os botões emitem input PC virtual, sem remote; ajuste o mapeamento em **Ajustes → Entrada real (Delta / VIM)** se o jogo usar outras teclas
+4. Para reescanear após o campo carregar: aba **Início** → **DETECTAR TUDO DO EXPLORER**
+5. O botão **CALIBRAR REMOTE** é apenas para o modo legado; não é necessário no modo VIM
 6. Travando? Aba **Ajustes** → **ANTI-LAG ULTRA** ou **MODO ITEL A70**
 
 ### Controles
@@ -63,8 +63,8 @@ Use por sua conta e risco. O uso de exploits pode resultar em punição dentro d
 ## ⚡ Novidades da V3 LITE
 
 - **Motor 12Hz por evento** (antes: 60Hz com varreduras pesadas) — 5x mais leve, FPS adaptativo
-- **Teclas reais (VIM)**: drible (Q), bote (E), mergulho (X) e power shot (F) pelo caminho real do jogo
-- **Auto-calibração de chute**: testa formatos e detecta qual move a bola de verdade
+- **Adaptador VIM para Delta**: botões do hub enviam input PC configurável (Mouse1/Q/E/X/F/Space) e o padrão é **VIM somente**, sem RemoteEvent nas ações mapeadas
+- **Mapeamento configurável**: escolha no Rayfield qual tecla/clique PC corresponde a chute, drible, tackle, mergulho, power shot e passe; a calibração de remote ficou como modo legado opcional
 - **Anti-lag**: modo ULTRA, modo Batata, sem chapéus, Mini UI nativa, modo ITEL A70 em 1 toque
 - **Diagnóstico na tela** + botões de teste em cada feature + trava manual da bola
 - **À prova de erros**: motor protegido por pcall total, cada aba isolada
