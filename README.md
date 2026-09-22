@@ -1,8 +1,8 @@
-# 🐍 SnakeHub V2 — Realistic Street Soccer
+# 🐍 SnakeHub V3 LITE — Realistic Street Soccer
 
-Script completo para o jogo **Realistic Street Soccer** (Roblox) com interface **Rayfield de 10 abas**, adaptado para **Mobile e PC** e compatível com **todos os executors** (Delta, Fluxus, Arceus, Codex, Solara, Wave, Cryptic, Hydrogen, Vegax, Trigon e outros).
+Script completo para o jogo **Realistic Street Soccer** (Roblox) com interface **Rayfield de 10 abas**, agora em versão **V3 LITE**: motor reescrito ultra-leve para **celular fraco** (ex: Itel A70), com **teclas reais simuladas + auto-calibração** para as features funcionarem de verdade.
 
-> Sem Key System. Sem dependências de funções específicas de executor.
+> Sem Key System. Sem dependências de funções específicas de executor. Se o Rayfield falhar, abre uma **Mini UI nativa** automaticamente.
 
 ## 🚀 Como usar
 
@@ -11,12 +11,20 @@ Script completo para o jogo **Realistic Street Soccer** (Roblox) com interface *
 Cole no seu executor dentro do jogo:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/WhiteXz7/SnakeHub/main/SnakeHubV2.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/WhiteXz7/SnakeHub/main/SnakeHubV3.lua"))()
 ```
 
 ### Opção 2 — Colar o código
 
-Abra o arquivo [`SnakeHubV2.lua`](SnakeHubV2.lua), copie tudo, cole no executor e execute.
+Abra o arquivo [`SnakeHubV3.lua`](SnakeHubV3.lua), copie tudo, cole no executor e execute.
+
+### Primeiros passos (importante)
+
+1. Aba **Início** → aperte **DIAGNÓSTICO** (mostra bola, remotes, teclas, FPS)
+2. Se a bola não for encontrada: fique perto dela e aperte **TRAVAR BOLA**
+3. Fique **parado com a bola no pé** → aba **Auto Shoot** → **CALIBRAR CHUTE** (1 vez só)
+4. Ative **TOP 1 GLOBAL** e jogue
+5. Travando? Aba **Ajustes** → **ANTI-LAG ULTRA** ou **MODO ITEL A70**
 
 ### Controles
 
@@ -51,7 +59,17 @@ Os botões flutuantes podem ser **arrastados** para qualquer lugar da tela.
 
 Use por sua conta e risco. O uso de exploits pode resultar em punição dentro do jogo. Recomenda-se testar em conta alternativa.
 
+## ⚡ Novidades da V3 LITE
+
+- **Motor 12Hz por evento** (antes: 60Hz com varreduras pesadas) — 5x mais leve, FPS adaptativo
+- **Teclas reais (VIM)**: drible (Q), bote (E), mergulho (X) e power shot (F) pelo caminho real do jogo
+- **Auto-calibração de chute**: testa formatos e detecta qual move a bola de verdade
+- **Anti-lag**: modo ULTRA, modo Batata, sem chapéus, Mini UI nativa, modo ITEL A70 em 1 toque
+- **Diagnóstico na tela** + botões de teste em cada feature + trava manual da bola
+- **À prova de erros**: motor protegido por pcall total, cada aba isolada
+
 ## 📁 Arquivos
 
-- [`SnakeHubV2.lua`](SnakeHubV2.lua) — script principal (10 abas)
-- `SnakeHubV1` — versão anterior (5 abas, mantida para referência)
+- [`SnakeHubV3.lua`](SnakeHubV3.lua) — script principal (10 abas, versão LITE recomendada)
+- [`SnakeHubV2.lua`](SnakeHubV2.lua) — versão anterior (mantida para referência)
+- `SnakeHubV1` — primeira versão (mantida para referência)
