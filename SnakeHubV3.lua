@@ -98,7 +98,6 @@ local Config = {
     DoubleFire = true,              -- usado somente no modo legado
     VimShootInput = "Mouse1",      -- controle oficial: segurar clique esquerdo
     VimShootPointer = "Centro da tela", -- Centro da tela | Alvo projetado
-    VimPassInput = "Mouse1",       -- o jogo usa clique esquerdo para chute/passe
     VimDribbleInput = "Q",
     VimDribbleHold = 0.35,          -- Q precisa de um toque um pouco mais longo
     VimTackleInput = "E",
@@ -147,7 +146,6 @@ local Config = {
     -- GK
     AutoDive = false,
     AutoDefense = false,
-    AutoPassGK = false,
     AutoPunch = false,
     GKRange = 40,
     GKMode = "Automatico",
@@ -189,7 +187,7 @@ local Running = true
 local ErrorCount = 0
 local Cooldown = {
     Shoot = 0, Dribble = 0, Tackle = 0, Dive = 0, Punch = 0,
-    Bicycle = 0, Header = 0, Volley = 0, Chip = 0, Pass = 0,
+    Bicycle = 0, Header = 0, Volley = 0, Chip = 0,
     PowerShot = 0, Faceoff = 0, Penalty = 0,
 }
 local Connections = {}
@@ -360,8 +358,6 @@ end
 local function bindingForAction(action)
     if action == "Shoot" then
         return Config.VimShootInput
-    elseif action == "Pass" then
-        return Config.VimPassInput
     elseif action == "Dribble" then
         return Config.VimDribbleInput
     elseif action == "Tackle" then
@@ -963,39 +959,6 @@ local function getEnemyWithBall(maxDist)
     return best, bestD
 end
 
-local function getBestMate()
-    local _, hrp = myChar()
-    if not hrp then
-        return nil
-    end
-    local atk = getAttackGoal()
-    local best, bestScore = nil, -math.huge
-    for _, plr in ipairs(PlayerCache) do
-        if plr ~= LocalPlayer and (not isEnemy(plr)) and plr.Character then
-            local mHrp = charHrp(plr.Character)
-            if mHrp then
-                local d = (mHrp.Position - hrp.Position).Magnitude
-                if d > 8 and d < 140 then
-                    local ahead = 0
-                    if atk then
-                        local toAtk = (atk - hrp.Position)
-                        local toMate = (mHrp.Position - hrp.Position)
-                        if toAtk.Magnitude > 1 and toMate.Magnitude > 1 then
-                            ahead = toAtk.Unit:Dot(toMate.Unit)
-                        end
-                    end
-                    local score = ahead * 50 - d * 0.15
-                    if score > bestScore then
-                        bestScore = score
-                        best = plr.Character
-                    end
-                end
-            end
-        end
-    end
-    return best
-end
-
 local function isBallFree()
     local ball = findBall()
     if not ball then
@@ -1419,40 +1382,6 @@ local function doDive(side)
         fire(Remotes.GKHitbox, ball.Position)
     end
     return did
-end
-
-local function doGKPass()
-    local _, hrp = myChar()
-    local ball = findBall()
-    if not hrp or not ball then
-        return false
-    end
-    if not isGK() or not hasBall(6.5) or ball.Velocity.Magnitude > 10 then
-        return false
-    end
-    local mate = getBestMate()
-    if not mate then
-        return false
-    end
-    local mHrp = charHrp(mate)
-    if not mHrp then
-        return false
-    end
-    local target = mHrp.Position + mHrp.Velocity * 0.25
-    if not vimOnlyMode() then
-        faceTowards(target)
-    end
-    if vimOnlyMode() then
-        return emitGameAction("Pass", 0.4, target)
-    end
-    local ok = fire(Remotes.Pass, target, 70)
-    if not ok then
-        ok = fire(Remotes.Pass, target)
-    end
-    if not ok then
-        ok = emitGameAction("Pass", 0.4, target)
-    end
-    return ok
 end
 
 local function doJump()
@@ -2101,13 +2030,6 @@ local function combatTick()
             end)
         end
     end
-    if Config.AutoPassGK and (now - Cooldown.Pass) > 3 then
-        if amGK and ballDistMe <= 6.5 and ball.Velocity.Magnitude <= 10 then
-            Cooldown.Pass = now
-            task.spawn(doGKPass)
-        end
-    end
-
     -- 7) AIM LOCK
     if Config.AimLock and ballDistMe <= 5 and not TOP and not vimOnlyMode() then
         local aim = computeAim(false)
@@ -3203,7 +3125,6 @@ local function setTopGlobal(v)
         Config.AutoChip = true
         Config.AutoDive = true
         Config.AutoDefense = true
-        Config.AutoPassGK = true
         Config.AutoPunch = true
         Config.AutoPowerShot = true
         Config.AimLock = true
@@ -3491,7 +3412,6 @@ else
                     Config.AutoChip = false
                     Config.AutoDive = false
                     Config.AutoDefense = false
-                    Config.AutoPassGK = false
                     Config.AutoPunch = false
                     Config.AutoPowerShot = false
                     Config.AutoFaceoff = false
@@ -3896,14 +3816,6 @@ else
                 end,
             })
             T:CreateToggle({
-                Name = "AUTO PASSE (so GK)",
-                CurrentValue = false,
-                Flag = "G_Pass3",
-                Callback = function(v)
-                    Config.AutoPassGK = v
-                end,
-            })
-            T:CreateToggle({
                 Name = "AUTO SOCO",
                 CurrentValue = false,
                 Flag = "G_Punch3",
@@ -4000,7 +3912,6 @@ else
                         Config.GKRange = 50
                         Config.AutoDive = true
                         Config.AutoDefense = true
-                        Config.AutoPassGK = true
                         Config.AutoPunch = true
                     else
                         Config.ShootDist = 260
@@ -4513,15 +4424,6 @@ else
                 Flag = "S_VimPower3",
                 Callback = function(opt)
                     Config.VimPowerInput = normOpt(opt, "F")
-                end,
-            })
-            T:CreateDropdown({
-                Name = "Input PC: passe",
-                Options = { "Mouse1", "Mouse2", "Q", "E", "R", "F", "G", "Space" },
-                CurrentOption = "Mouse1",
-                Flag = "S_VimPass3",
-                Callback = function(opt)
-                    Config.VimPassInput = normOpt(opt, "Mouse1")
                 end,
             })
             T:CreateToggle({

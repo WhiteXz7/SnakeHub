@@ -45,7 +45,7 @@ Os botões flutuantes podem ser **arrastados** para qualquer lugar da tela.
 | 3 | 🌀 **Auto Drible** | Drible perfeito anti-roubo (já vem configurado), estilos, escudo corporal |
 | 4 | 🛡️ **Auto Tackle** | Bote limpo sem falta (já vem configurado), interceptação de passes |
 | 5 | 🤸 **Auto Actions** | Bicicleta, cabeceio, voleio/chapa e cavadinha automáticos + botões manuais |
-| 6 | 🧤 **Goleiro GK** | Auto dive, defesa legit OP, auto passe (só GK), soco/afasta bola, mergulhos manuais |
+| 6 | 🧤 **Goleiro GK** | Auto dive, defesa legit OP, soco/afasta bola e mergulhos manuais |
 | 7 | 👑 **Top 1 Global** | Modo 100%: liga tudo + movimento PRO + espelho de movimento avançado. Você joga normal, o script eleva seu nível |
 | 8 | 🔓 **Unlock All** | Cards, chuteiras, dribles, luvas, Copa do Mundo, diárias, quests, códigos e coleta de itens |
 | 9 | ⚡ **Partida** | Stamina infinita, velocidade, sem tremor de câmera, pular comemoração, FPS Boost, faceoff/pênalti auto, times, teleportes, ESP |
