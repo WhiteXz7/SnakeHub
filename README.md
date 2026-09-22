@@ -11,7 +11,7 @@ Script completo para o jogo **Realistic Street Soccer** (Roblox) com interface *
 Cole no seu executor dentro do jogo:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/WhiteXz7/SnakeHub/main/SnakeHubV3.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/WhiteXz7/SnakeHub/arena/01a0c6cb-snakehub/SnakeHubV3.lua"))()
 ```
 
 ### Opção 2 — Colar o código
@@ -20,11 +20,12 @@ Abra o arquivo [`SnakeHubV3.lua`](SnakeHubV3.lua), copie tudo, cole no executor 
 
 ### Primeiros passos (importante)
 
-1. Aba **Início** → aperte **DIAGNÓSTICO** (mostra bola, remotes, teclas, FPS)
+1. O **Detector automático do Explorer** inicia sozinho e indexa os objetos visíveis ao cliente; aperte **DIAGNÓSTICO** para ver o resultado
 2. Se a bola não for encontrada: fique perto dela e aperte **TRAVAR BOLA**
-3. Fique **parado com a bola no pé** → aba **Auto Shoot** → **CALIBRAR CHUTE** (1 vez só)
-4. Ative **TOP 1 GLOBAL** e jogue
-5. Travando? Aba **Ajustes** → **ANTI-LAG ULTRA** ou **MODO ITEL A70**
+3. Para reescanear após o campo carregar: aba **Início** → **DETECTAR TUDO DO EXPLORER**
+4. Fique **parado com a bola no pé** → aba **Auto Shoot** → **CALIBRAR CHUTE** (1 vez só)
+5. Ative **TOP 1 GLOBAL** e jogue
+6. Travando? Aba **Ajustes** → **ANTI-LAG ULTRA** ou **MODO ITEL A70**
 
 ### Controles
 
@@ -68,7 +69,7 @@ Use por sua conta e risco. O uso de exploits pode resultar em punição dentro d
 - **Diagnóstico na tela** + botões de teste em cada feature + trava manual da bola
 - **À prova de erros**: motor protegido por pcall total, cada aba isolada
 - **Botão exclusivo AUTO SHOOT**: semitransparente, aparece sozinho ao iniciar, liga/desliga + chuta
-- **Mapeador do Explorer**: 1 clique gera a estrutura real do jogo (remotes, bola, workspace) em texto copiável
+- **Detector automático do Explorer**: inicia sozinho, percorre toda a árvore visível ao cliente, seleciona candidatos locais de bola/gols, atualiza os remotes já conhecidos e pode salvar um snapshot TXT ao reescanear
 - **99% travado em tudo** (sem teleporte na bola)
 
 ## 📁 Arquivos
