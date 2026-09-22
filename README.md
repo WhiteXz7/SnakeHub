@@ -67,6 +67,9 @@ Use por sua conta e risco. O uso de exploits pode resultar em punição dentro d
 - **Anti-lag**: modo ULTRA, modo Batata, sem chapéus, Mini UI nativa, modo ITEL A70 em 1 toque
 - **Diagnóstico na tela** + botões de teste em cada feature + trava manual da bola
 - **À prova de erros**: motor protegido por pcall total, cada aba isolada
+- **Botão exclusivo AUTO SHOOT**: semitransparente, aparece sozinho ao iniciar, liga/desliga + chuta
+- **Mapeador do Explorer**: 1 clique gera a estrutura real do jogo (remotes, bola, workspace) em texto copiável
+- **99% travado em tudo** (sem teleporte na bola)
 
 ## 📁 Arquivos
 

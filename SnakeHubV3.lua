@@ -15,6 +15,8 @@
     2) Aperte DIAGNOSTICO (aba Inicio) para ver o status
     3) Fique com a bola no pe e aperte CALIBRAR CHUTE (1 vez)
     4) Ative TOP 1 GLOBAL e jogue. No lag? Aba Ajustes > ANTI-LAG ULTRA
+    5) Botao semitransparente AUTO SHOOT aparece sozinho na tela
+    6) Aba Inicio > MAPEAR EXPLORER gera a estrutura real do jogo
     ----------------------------------------------------------------------------
     AVISO: use por sua conta e risco. Exploits podem gerar punicao no jogo.
 ============================================================================= ]]
@@ -79,6 +81,7 @@ local Config = {
     UIKey = "RightShift",
     FloatUI = true,
     FloatShoot = true,
+    FloatAutoShoot = true, -- botao exclusivo semitransparente (aparece sozinho)
 
     -- Metodos de disparo (o segredo da V3)
     VimKeys = true,        -- usa teclas reais (Q/E/X/F) - mais confiavel
@@ -805,11 +808,10 @@ local function computeAim(perfect)
         aim = goalPos + right * (3 * side) + Vector3.new(0, 3.0, 0)
     end
 
-    if not perfect then
-        local miss = math.max(0, (100 - Config.Accuracy)) / 100
-        local spread = miss * 4
-        aim = aim + Vector3.new((math.random() - 0.5) * 2 * spread, (math.random() - 0.5) * spread, (math.random() - 0.5) * 2 * spread)
-    end
+    -- 99% SEMPRE: micro-variacao humana (4cm) = parece legit mas quase nunca erra
+    local miss = math.max(0, (100 - Config.Accuracy)) / 100
+    local spread = miss * 4
+    aim = aim + Vector3.new((math.random() - 0.5) * 2 * spread, (math.random() - 0.5) * spread, (math.random() - 0.5) * 2 * spread)
     return aim
 end
 
@@ -1527,7 +1529,22 @@ local function setUiVisible(v)
     end)
 end
 
-local SnakeBtn, ShootBtn = nil, nil
+local SnakeBtn, ShootBtn, AutoShootBtn = nil, nil, nil
+
+-- Botao EXCLUSIVO do auto shoot: semitransparente, liga/desliga + chuta
+local function refreshAutoShootBtn()
+    if AutoShootBtn and AutoShootBtn.Parent then
+        if Config.AutoShoot then
+            AutoShootBtn.BackgroundColor3 = Color3.fromRGB(0, 170, 80)
+            AutoShootBtn.Text = "AUTO\nSHOOT ON"
+        else
+            AutoShootBtn.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
+            AutoShootBtn.Text = "AUTO\nSHOOT"
+        end
+        AutoShootBtn.Visible = Config.FloatAutoShoot
+    end
+end
+
 local function buildFloatButtons()
     local gui = getFloatGui()
     if not SnakeBtn or not SnakeBtn.Parent then
@@ -1555,8 +1572,29 @@ local function buildFloatButtons()
             end
         end)
     end
+    if not AutoShootBtn or not AutoShootBtn.Parent then
+        AutoShootBtn = Instance.new("TextButton")
+        AutoShootBtn.Name = "AutoShootToggle"
+        styleFloatButton(AutoShootBtn, UDim2.new(0, 78, 0, 78), UDim2.new(0, 10, 0.5, -44),
+            "AUTO\nSHOOT", Color3.fromRGB(90, 90, 100), 13)
+        AutoShootBtn.BackgroundTransparency = 0.35 -- semitransparente exclusivo
+        AutoShootBtn.Parent = gui
+        makeFloatButton(AutoShootBtn, function()
+            Config.AutoShoot = not Config.AutoShoot
+            refreshAutoShootBtn()
+            if Config.AutoShoot then
+                notify("Auto Shoot", "LIGADO pelo botao exclusivo (99%).", 2)
+                task.spawn(function()
+                    doShoot(100, nil, false)
+                end)
+            else
+                notify("Auto Shoot", "DESLIGADO.", 2)
+            end
+        end)
+    end
     SnakeBtn.Visible = Config.FloatUI
     ShootBtn.Visible = Config.FloatShoot
+    refreshAutoShootBtn()
 end
 
 --[[ ================== MEDIDOR DE FPS + TICK ADAPTATIVO =================== ]]
@@ -1762,7 +1800,7 @@ local function combatTick()
         end
     end
 
-    -- 8) TOP GLOBAL: mira 100% + espelho + movimento PRO
+    -- 8) TOP GLOBAL: mira 99% + espelho + movimento PRO
     if TOP then
         if ballDistMe <= 5.5 then
             local aim = computeAim(true)
@@ -2116,6 +2154,205 @@ local function diagString()
     return table.concat(lines, "\n")
 end
 
+--[[ ==================== MAPEADOR DO EXPLORER (1 clique) =================== ]]
+-- Varre o jogo e mostra a ESTRUTURA REAL: remotes, bola, workspace, PlayerGui.
+-- Copie o resultado e envie para fixar os caminhos exatos no script.
+local Mapping = false
+
+local function showCopyWindow(title, text)
+    local parent = getGuiParent()
+    pcall(function()
+        local old = parent:FindFirstChild("__SnakeCopyV3")
+        if old then
+            old:Destroy()
+        end
+    end)
+    local g = Instance.new("ScreenGui")
+    g.Name = "__SnakeCopyV3"
+    g.ResetOnSpawn = false
+    g.IgnoreGuiInset = true
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 430)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -215)
+    frame.BackgroundColor3 = Color3.fromRGB(18, 20, 24)
+    frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
+    local fc = Instance.new("UICorner")
+    fc.CornerRadius = UDim.new(0, 10)
+    fc.Parent = frame
+    local tb = Instance.new("TextLabel")
+    tb.Size = UDim2.new(1, 0, 0, 28)
+    tb.BackgroundTransparency = 1
+    tb.Font = Enum.Font.GothamBold
+    tb.TextSize = 13
+    tb.TextColor3 = Color3.fromRGB(0, 255, 130)
+    tb.Text = title
+    tb.Parent = frame
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -16, 1, -110)
+    box.Position = UDim2.new(0, 8, 0, 30)
+    box.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
+    box.Font = Enum.Font.Code
+    box.TextSize = 11
+    box.TextColor3 = Color3.fromRGB(220, 230, 220)
+    box.TextXAlignment = Enum.TextXAlignment.Left
+    box.TextYAlignment = Enum.TextYAlignment.Top
+    box.MultiLine = true
+    box.ClearTextOnFocus = false
+    box.TextEditable = true
+    box.TextWrapped = false
+    box.Text = text
+    box.Parent = frame
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 8)
+    bc.Parent = box
+    local copyB = Instance.new("TextButton")
+    copyB.Size = UDim2.new(0.5, -12, 0, 32)
+    copyB.Position = UDim2.new(0, 8, 1, -72)
+    copyB.Font = Enum.Font.GothamBold
+    copyB.TextSize = 13
+    copyB.TextColor3 = Color3.fromRGB(255, 255, 255)
+    copyB.BackgroundColor3 = Color3.fromRGB(0, 130, 200)
+    copyB.BorderSizePixel = 0
+    copyB.Text = "COPIAR"
+    copyB.Parent = frame
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 8)
+    cc.Parent = copyB
+    copyB.MouseButton1Click:Connect(function()
+        local done = false
+        pcall(function()
+            if typeof(setclipboard) == "function" then
+                setclipboard(text)
+                done = true
+            end
+        end)
+        if done then
+            copyB.Text = "COPIADO!"
+        else
+            copyB.Text = "SELECIONE O TEXTO"
+            pcall(function()
+                box:CaptureFocus()
+            end)
+        end
+    end)
+    local closeB = Instance.new("TextButton")
+    closeB.Size = UDim2.new(0.5, -12, 0, 32)
+    closeB.Position = UDim2.new(0.5, 4, 1, -72)
+    closeB.Font = Enum.Font.GothamBold
+    closeB.TextSize = 13
+    closeB.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeB.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
+    closeB.BorderSizePixel = 0
+    closeB.Text = "FECHAR"
+    closeB.Parent = frame
+    local zc = Instance.new("UICorner")
+    zc.CornerRadius = UDim.new(0, 8)
+    zc.Parent = closeB
+    closeB.MouseButton1Click:Connect(function()
+        pcall(function()
+            g:Destroy()
+        end)
+    end)
+    local hint = Instance.new("TextLabel")
+    hint.Size = UDim2.new(1, -16, 0, 30)
+    hint.Position = UDim2.new(0, 8, 1, -36)
+    hint.BackgroundTransparency = 1
+    hint.Font = Enum.Font.Gotham
+    hint.TextSize = 10
+    hint.TextColor3 = Color3.fromRGB(160, 160, 170)
+    hint.Text = "Envie esse texto p/ fixar os caminhos exatos."
+    hint.Parent = frame
+    pcall(function()
+        g.Parent = parent
+    end)
+end
+
+local function mapExplorer()
+    if Mapping then
+        notify("Mapeador", "Ja estou mapeando, aguarde.", 2)
+        return
+    end
+    Mapping = true
+    notify("Mapeador", "Mapeando o jogo (pode travar 2s)...", 3)
+    task.spawn(function()
+        local out = {}
+        local function line(s)
+            table.insert(out, s)
+        end
+        pcall(function()
+            line("== SNAKEHUB MAPA DO JOGO ==")
+            line("PlaceId: " .. tostring(game.PlaceId))
+            line("")
+            line("== REMOTES (ReplicatedStorage) ==")
+            local n = 0
+            for _, d in ipairs(ReplicatedStorage:GetDescendants()) do
+                if d:IsA("RemoteEvent") or d:IsA("RemoteFunction")
+                    or d:IsA("UnreliableRemoteEvent") or d:IsA("BindableEvent") then
+                    n = n + 1
+                    if n <= 150 then
+                        line(d.ClassName .. " | " .. d:GetFullName())
+                    end
+                end
+            end
+            line("Total remotes: " .. n)
+            line("")
+            line("== WORKSPACE (filhos diretos) ==")
+            local kids = workspace:GetChildren()
+            for i = 1, math.min(#kids, 120) do
+                local k = kids[i]
+                line(k.ClassName .. " | " .. k.Name)
+            end
+            line("Total filhos: " .. #kids)
+            line("")
+            line("== CANDIDATOS A BOLA ==")
+            local nb = 0
+            for _, d in ipairs(workspace:GetDescendants()) do
+                if d:IsA("BasePart") and nb < 40 then
+                    local par = d.Parent
+                    local isChar = par and par:FindFirstChildOfClass("Humanoid")
+                    if not isChar then
+                        local s = ballNameScore(d.Name)
+                        local isBallShape = (d.Shape == Enum.PartType.Ball)
+                        local sz = d.Size.Magnitude
+                        if s > 0 or isBallShape or (not d.Anchored and sz > 1 and sz < 5) then
+                            nb = nb + 1
+                            line(d.Name .. " | " .. d:GetFullName()
+                                .. " | size=" .. string.format("%.1f", sz)
+                                .. " | anc=" .. tostring(d.Anchored))
+                        end
+                    end
+                end
+            end
+            line("Total candidatos: " .. nb)
+            line("")
+            line("== GOLS (cache do script) ==")
+            for i, g in ipairs(GoalsList) do
+                if g.Parent then
+                    line(i .. ". " .. g:GetFullName())
+                end
+            end
+            line("")
+            line("== PLAYERGUI ==")
+            local pgui = LocalPlayer:FindFirstChildOfClass("PlayerGui")
+            if pgui then
+                for _, k in ipairs(pgui:GetChildren()) do
+                    line(k.ClassName .. " | " .. k.Name)
+                end
+                local stam = pgui:FindFirstChild("Stamina", true)
+                if stam then
+                    line("Stamina PATH: " .. stam:GetFullName())
+                end
+            end
+            line("")
+            line("== FIM ==")
+        end)
+        Mapping = false
+        showCopyWindow("MAPA DO JOGO (copie e envie)", table.concat(out, "\n"))
+    end)
+end
+
 --[[ ============================ MINI UI (NATIVA) ========================== ]]
 -- Interface de ~20 instancias para celular fraco ou se o Rayfield falhar.
 local MiniGui, MiniStatus, MiniBtns = nil, nil, {}
@@ -2191,16 +2428,18 @@ local function setTopGlobal(v)
         Config.AutoPunch = true
         Config.AutoPowerShot = true
         Config.AimLock = true
-        Config.Accuracy = 100
+        Config.Accuracy = 99
         for _, r in ipairs(MiniBtns) do
             pcall(r)
         end
-        notify("TOP 1 GLOBAL", "100% ATIVADO.", 4)
+        pcall(refreshAutoShootBtn)
+        notify("TOP 1 GLOBAL", "99% ATIVADO.", 4)
     else
         Config.Accuracy = 99
         for _, r in ipairs(MiniBtns) do
             pcall(r)
         end
+        pcall(refreshAutoShootBtn)
     end
 end
 
@@ -2248,7 +2487,7 @@ local function buildMiniUI()
     scroll.Position = UDim2.new(0, 0, 0, 142)
     scroll.BackgroundTransparency = 1
     scroll.ScrollBarThickness = 4
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 760)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 800)
     scroll.Parent = frame
     local y = 0
     y = miniToggleBtn(scroll, y, "TOP 1 GLOBAL", function()
@@ -2258,6 +2497,7 @@ local function buildMiniUI()
         return Config.AutoShoot
     end, function(v)
         Config.AutoShoot = v
+        pcall(refreshAutoShootBtn)
     end)
     y = miniToggleBtn(scroll, y, "Auto Drible", function()
         return Config.AutoDribble
@@ -2320,6 +2560,7 @@ local function buildMiniUI()
         updateMiniStatus()
         notify("Diagnostico", diagString(), 6)
     end)
+    y = miniActionBtn(scroll, y, "MAPEAR JOGO", Color3.fromRGB(0, 150, 150), mapExplorer)
     y = miniActionBtn(scroll, y, "FECHAR (motor continua)", Color3.fromRGB(80, 80, 90), function()
         g.Enabled = false
         setUiVisible(false)
@@ -2434,9 +2675,13 @@ else
                     notify("Campo", "Escaneando bola e gols...", 2)
                 end,
             })
+            T:CreateButton({
+                Name = "MAPEAR EXPLORER DO JOGO",
+                Callback = mapExplorer,
+            })
             T:CreateSection("Ativacao rapida")
             T:CreateButton({
-                Name = "ATIVAR MODO TOP 1 GLOBAL (100%)",
+                Name = "ATIVAR MODO TOP 1 GLOBAL (99%)",
                 Callback = function()
                     setTopGlobal(true)
                 end,
@@ -2459,6 +2704,7 @@ else
                     Config.AutoPowerShot = false
                     Config.AutoFaceoff = false
                     Config.AutoPenalty = false
+                    pcall(refreshAutoShootBtn)
                     notify("SnakeHub", "Tudo desligado.", 3)
                 end,
             })
@@ -2525,6 +2771,7 @@ else
                 Flag = "S_Auto3",
                 Callback = function(v)
                     Config.AutoShoot = v
+                    pcall(refreshAutoShootBtn)
                 end,
             })
             T:CreateButton({
@@ -2547,6 +2794,15 @@ else
                     if ShootBtn then
                         ShootBtn.Visible = v
                     end
+                end,
+            })
+            T:CreateToggle({
+                Name = "Botao exclusivo AUTO SHOOT",
+                CurrentValue = true,
+                Flag = "S_FloatAuto3",
+                Callback = function(v)
+                    Config.FloatAutoShoot = v
+                    pcall(refreshAutoShootBtn)
                 end,
             })
             T:CreateDropdown({
@@ -2915,9 +3171,9 @@ else
             if not T then
                 return
             end
-            T:CreateSection("Modo maximo 100%")
+            T:CreateSection("Modo maximo 99%")
             T:CreateToggle({
-                Name = "TOP 1 GLOBAL (100%)",
+                Name = "TOP 1 GLOBAL (99%)",
                 CurrentValue = false,
                 Flag = "Top_Master3",
                 Callback = setTopGlobal,
@@ -3262,15 +3518,7 @@ else
                     notify("TP", "Destino: " .. (label or "?") .. " indisponivel.", 2)
                 end
             end
-            T:CreateButton({
-                Name = "TP: BOLA",
-                Callback = function()
-                    local ball = findBall()
-                    if ball then
-                        tpTo(ball.Position, "bola")
-                    end
-                end,
-            })
+            -- (TP na bola removido: sem teleporte na bola)
             T:CreateButton({
                 Name = "TP: MEIO",
                 Callback = function()
