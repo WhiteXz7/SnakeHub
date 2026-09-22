@@ -72,8 +72,23 @@ Use por sua conta e risco. O uso de exploits pode resultar em punição dentro d
 - **Detector automático do Explorer**: inicia sozinho, percorre toda a árvore visível ao cliente, seleciona candidatos locais de bola/gols, atualiza os remotes já conhecidos e pode salvar um snapshot TXT ao reescanear
 - **99% travado em tudo** (sem teleporte na bola)
 
+## 🧰 Serializer de Modelo para Studio
+
+Para modelos que você criou ou tem autorização para usar, há também o [`StudioModelSerializer.plugin.lua`](StudioModelSerializer.plugin.lua).
+
+> Este arquivo é um **plugin do Roblox Studio**, não um `LocalScript` para executor ou jogo em execução. Ele só lê o modelo selecionado no Studio.
+
+1. No Studio, crie um `Script` dentro de `ServerStorage`, cole o conteúdo do arquivo nele e selecione esse Script no Explorer.
+2. Abra **Plugins → Save as Local Plugin**. Depois apague o Script original de `ServerStorage` para evitar uma cópia duplicada.
+3. Selecione um único `Model`, `Folder` ou `BasePart` no Explorer ou viewport.
+4. Abra **Model Tools → Model Serializer** e clique em **Gerar script**.
+5. Clique em **Selecionar saída (Ctrl+C)**, copie o texto e cole no Command Bar do Studio.
+
+O gerador preserva a hierarquia e propriedades visuais/físicas comuns, além de attachments, joints, efeitos, sons, valores e atributos. Ele limita a exportação a 2.000 Instances e inclui notas no resultado quando pula algo. Por segurança, não exporta `Script`, `LocalScript`, `ModuleScript`, remotes ou bindables. O Studio não permite que este plugin escreva livremente na área de transferência; por isso o botão seleciona a saída para você copiar com `Ctrl+C`/`Cmd+C`.
+
 ## 📁 Arquivos
 
 - [`SnakeHubV3.lua`](SnakeHubV3.lua) — script principal (10 abas, versão LITE recomendada)
 - [`SnakeHubV2.lua`](SnakeHubV2.lua) — versão anterior (mantida para referência)
 - `SnakeHubV1` — primeira versão (mantida para referência)
+- [`StudioModelSerializer.plugin.lua`](StudioModelSerializer.plugin.lua) — plugin Studio para serializar modelos próprios/autorizados em código de reconstrução
