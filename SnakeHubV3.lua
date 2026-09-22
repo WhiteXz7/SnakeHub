@@ -2159,6 +2159,55 @@ end
 -- Copie o resultado e envie para fixar os caminhos exatos no script.
 local Mapping = false
 
+-- Copia robusta: tenta TODOS os metodos de clipboard dos executors
+local function tryCopy(text)
+    local fns = {}
+    pcall(function()
+        local envs = { _G }
+        if typeof(getgenv) == "function" then
+            table.insert(envs, getgenv())
+        end
+        for _, e in ipairs(envs) do
+            if type(e["setclipboard"]) == "function" then
+                table.insert(fns, e["setclipboard"])
+            end
+            if type(e["toclipboard"]) == "function" then
+                table.insert(fns, e["toclipboard"])
+            end
+            if type(e["set_clipboard"]) == "function" then
+                table.insert(fns, e["set_clipboard"])
+            end
+            local cb = e["Clipboard"]
+            if type(cb) == "table" and type(cb.set) == "function" then
+                table.insert(fns, function(t)
+                    cb.set(t)
+                end)
+            end
+        end
+    end)
+    for _, fn in ipairs(fns) do
+        local ok = pcall(function()
+            fn(text)
+        end)
+        if ok then
+            return true
+        end
+    end
+    return false
+end
+
+local function trySaveFile(name, text)
+    local saved = false
+    pcall(function()
+        if typeof(writefile) == "function" then
+            writefile(name, text)
+            saved = true
+        end
+    end)
+    return saved
+end
+
+-- Janela do mapa: paginas curtas + copia automatica + salvar txt
 local function showCopyWindow(title, text)
     local parent = getGuiParent()
     pcall(function()
@@ -2167,13 +2216,43 @@ local function showCopyWindow(title, text)
             old:Destroy()
         end
     end)
+    -- quebra em paginas curtas (copia facil no celular)
+    local pages = {}
+    do
+        local PAGE = 2200
+        local rest = text or ""
+        if #rest == 0 then
+            rest = "(vazio - mapeamento falhou)"
+        end
+        while #rest > 0 do
+            if #rest <= PAGE then
+                table.insert(pages, rest)
+                rest = ""
+            else
+                local cut = PAGE
+                local i = PAGE
+                while i > PAGE - 300 and i > 1 do
+                    if string.sub(rest, i, i) == "\n" then
+                        cut = i
+                        break
+                    end
+                    i = i - 1
+                end
+                table.insert(pages, string.sub(rest, 1, cut))
+                rest = string.sub(rest, cut + 1)
+            end
+        end
+    end
+    local page = 1
+    local totalChars = #(text or "")
+
     local g = Instance.new("ScreenGui")
     g.Name = "__SnakeCopyV3"
     g.ResetOnSpawn = false
     g.IgnoreGuiInset = true
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 300, 0, 430)
-    frame.Position = UDim2.new(0.5, -150, 0.5, -215)
+    frame.Size = UDim2.new(0, 300, 0, 470)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -235)
     frame.BackgroundColor3 = Color3.fromRGB(18, 20, 24)
     frame.BorderSizePixel = 0
     frame.Active = true
@@ -2190,7 +2269,7 @@ local function showCopyWindow(title, text)
     tb.Text = title
     tb.Parent = frame
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -16, 1, -110)
+    box.Size = UDim2.new(1, -16, 0, 262)
     box.Position = UDim2.new(0, 8, 0, 30)
     box.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
     box.Font = Enum.Font.Code
@@ -2202,70 +2281,125 @@ local function showCopyWindow(title, text)
     box.ClearTextOnFocus = false
     box.TextEditable = true
     box.TextWrapped = false
-    box.Text = text
+    box.Text = pages[1]
     box.Parent = frame
     local bc = Instance.new("UICorner")
     bc.CornerRadius = UDim.new(0, 8)
     bc.Parent = box
-    local copyB = Instance.new("TextButton")
-    copyB.Size = UDim2.new(0.5, -12, 0, 32)
-    copyB.Position = UDim2.new(0, 8, 1, -72)
-    copyB.Font = Enum.Font.GothamBold
-    copyB.TextSize = 13
-    copyB.TextColor3 = Color3.fromRGB(255, 255, 255)
-    copyB.BackgroundColor3 = Color3.fromRGB(0, 130, 200)
-    copyB.BorderSizePixel = 0
-    copyB.Text = "COPIAR"
-    copyB.Parent = frame
-    local cc = Instance.new("UICorner")
-    cc.CornerRadius = UDim.new(0, 8)
-    cc.Parent = copyB
-    copyB.MouseButton1Click:Connect(function()
-        local done = false
-        pcall(function()
-            if typeof(setclipboard) == "function" then
-                setclipboard(text)
-                done = true
-            end
-        end)
-        if done then
-            copyB.Text = "COPIADO!"
+    local pageLbl = Instance.new("TextLabel")
+    pageLbl.Size = UDim2.new(1, -16, 0, 16)
+    pageLbl.Position = UDim2.new(0, 8, 0, 294)
+    pageLbl.BackgroundTransparency = 1
+    pageLbl.Font = Enum.Font.GothamBold
+    pageLbl.TextSize = 11
+    pageLbl.TextColor3 = Color3.fromRGB(255, 220, 100)
+    pageLbl.Text = ""
+    pageLbl.Parent = frame
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -16, 0, 82)
+    status.Position = UDim2.new(0, 8, 0, 384)
+    status.BackgroundTransparency = 1
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 10
+    status.TextColor3 = Color3.fromRGB(170, 170, 180)
+    status.TextWrapped = true
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.TextYAlignment = Enum.TextYAlignment.Top
+    status.Text = "Tentando copia automatica..."
+    status.Parent = frame
+    local function setStatus(msg, good)
+        status.Text = msg
+        if good then
+            status.TextColor3 = Color3.fromRGB(120, 255, 140)
         else
-            copyB.Text = "SELECIONE O TEXTO"
+            status.TextColor3 = Color3.fromRGB(255, 220, 120)
+        end
+    end
+    local function refreshPage()
+        pageLbl.Text = "Pagina " .. page .. "/" .. #pages .. " (" .. totalChars .. " letras)"
+        box.Text = pages[page]
+        pcall(function()
+            box.CursorPosition = 1
+        end)
+    end
+    local function mkBtn(x, y, w, txt, color)
+        local b = Instance.new("TextButton")
+        b.Size = UDim2.new(0, w, 0, 32)
+        b.Position = UDim2.new(0, x, 0, y)
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 12
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.BackgroundColor3 = color
+        b.BorderSizePixel = 0
+        b.Text = txt
+        b.Parent = frame
+        local cc = Instance.new("UICorner")
+        cc.CornerRadius = UDim.new(0, 8)
+        cc.Parent = b
+        return b
+    end
+    local bPrev = mkBtn(8, 312, 84, "< ANT", Color3.fromRGB(70, 70, 80))
+    local bCopy = mkBtn(96, 312, 104, "COPIAR PAG", Color3.fromRGB(0, 130, 200))
+    local bNext = mkBtn(204, 312, 88, "PROX >", Color3.fromRGB(70, 70, 80))
+    local bAll = mkBtn(8, 348, 90, "TUDO", Color3.fromRGB(0, 150, 90))
+    local bTxt = mkBtn(102, 348, 90, "SALVAR TXT", Color3.fromRGB(130, 70, 180))
+    local bClose = mkBtn(196, 348, 96, "FECHAR", Color3.fromRGB(90, 90, 100))
+    bPrev.MouseButton1Click:Connect(function()
+        if page > 1 then
+            page = page - 1
+            refreshPage()
+        end
+    end)
+    bNext.MouseButton1Click:Connect(function()
+        if page < #pages then
+            page = page + 1
+            refreshPage()
+        end
+    end)
+    bCopy.MouseButton1Click:Connect(function()
+        if tryCopy(pages[page]) then
+            setStatus("PAGINA " .. page .. " COPIADA! Cole no chat e volte para copiar a proxima.", true)
+        else
+            setStatus("Copia bloqueada pelo executor. SEGURE O DEDO no texto > SELECIONAR TUDO > COPIAR.", false)
             pcall(function()
                 box:CaptureFocus()
             end)
         end
     end)
-    local closeB = Instance.new("TextButton")
-    closeB.Size = UDim2.new(0.5, -12, 0, 32)
-    closeB.Position = UDim2.new(0.5, 4, 1, -72)
-    closeB.Font = Enum.Font.GothamBold
-    closeB.TextSize = 13
-    closeB.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeB.BackgroundColor3 = Color3.fromRGB(90, 90, 100)
-    closeB.BorderSizePixel = 0
-    closeB.Text = "FECHAR"
-    closeB.Parent = frame
-    local zc = Instance.new("UICorner")
-    zc.CornerRadius = UDim.new(0, 8)
-    zc.Parent = closeB
-    closeB.MouseButton1Click:Connect(function()
+    bAll.MouseButton1Click:Connect(function()
+        if tryCopy(text) then
+            setStatus("TUDO COPIADO! Cole aqui no chat.", true)
+        else
+            setStatus("Copia total bloqueada. Copie PAGINA POR PAGINA ou segure o dedo no texto.", false)
+        end
+    end)
+    bTxt.MouseButton1Click:Connect(function()
+        if trySaveFile("snakehub_mapa.txt", text) then
+            setStatus("SALVO em snakehub_mapa.txt (pasta do executor). Abra o arquivo e me envie.", true)
+        else
+            setStatus("Seu executor nao salva arquivos. Use COPIAR PAG.", false)
+        end
+    end)
+    bClose.MouseButton1Click:Connect(function()
         pcall(function()
             g:Destroy()
         end)
     end)
-    local hint = Instance.new("TextLabel")
-    hint.Size = UDim2.new(1, -16, 0, 30)
-    hint.Position = UDim2.new(0, 8, 1, -36)
-    hint.BackgroundTransparency = 1
-    hint.Font = Enum.Font.Gotham
-    hint.TextSize = 10
-    hint.TextColor3 = Color3.fromRGB(160, 160, 170)
-    hint.Text = "Envie esse texto p/ fixar os caminhos exatos."
-    hint.Parent = frame
     pcall(function()
         g.Parent = parent
+    end)
+    refreshPage()
+    -- copia automatica ao abrir
+    task.spawn(function()
+        task.wait(0.4)
+        if tryCopy(text) then
+            setStatus("COPIADO AUTOMATICAMENTE! Cole aqui no chat.", true)
+            notify("Mapa", "Copiado! Cole o texto aqui no chat.", 4)
+        elseif trySaveFile("snakehub_mapa.txt", text) then
+            setStatus("Auto-copia indisponivel, mas SALVEI em snakehub_mapa.txt. Ou copie por pagina.", true)
+        else
+            setStatus("Auto-copia indisponivel: use COPIAR PAG (recomendado) ou segure o dedo no texto.", false)
+        end
     end)
 end
 
