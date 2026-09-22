@@ -96,10 +96,14 @@ local Config = {
     VimKeys = true,
     VimActionMode = "VIM somente", -- VIM somente | VIM + remoto legado
     DoubleFire = true,              -- usado somente no modo legado
-    VimShootInput = "Mouse1",      -- input PC real do chute
-    VimPassInput = "Mouse2",       -- input PC real do passe
+    VimShootInput = "Mouse1",      -- controle oficial: segurar clique esquerdo
+    VimShootPointer = "Centro da tela", -- Centro da tela | Alvo projetado
+    VimPassInput = "Mouse1",       -- o jogo usa clique esquerdo para chute/passe
     VimDribbleInput = "Q",
+    VimDribbleHold = 0.35,          -- Q precisa de um toque um pouco mais longo
     VimTackleInput = "E",
+    VimTackleHold = 0.05,           -- E e tap curto para nao prender a animacao
+    VimTackleCooldown = 1.05,
     VimDiveInput = "X",
     VimPowerInput = "F",
     VimJumpInput = "Space",
@@ -294,6 +298,9 @@ local function pressKey(keycode, holdTime)
     end
     VIM_EMITTING = VIM_EMITTING + 1
     local ok = pcall(function()
+        -- Delta pode deixar um estado anterior preso se o frame de release atrasar.
+        -- Limpa a tecla antes de iniciar o novo tap e sempre solta no final.
+        VIM:SendKeyEvent(false, keycode, false, game)
         VIM:SendKeyEvent(true, keycode, false, game)
     end)
     if not ok then
@@ -407,6 +414,11 @@ local function emitVimBinding(binding, holdTime, worldTarget)
 end
 
 local function emitGameAction(action, holdTime, worldTarget)
+    -- Para chute, Delta responde melhor ao clique PC no centro; a opcao de alvo
+    -- projetado continua disponivel para quem quiser mover o cursor virtual.
+    if action == "Shoot" and Config.VimShootPointer == "Centro da tela" then
+        worldTarget = nil
+    end
     return emitVimBinding(bindingForAction(action), holdTime, worldTarget)
 end
 
@@ -1335,7 +1347,7 @@ local function doDribble()
     if not (Config.ZeroDelay and Config.TopGlobal) then
         task.wait(0.04)
     end
-    local did = emitGameAction("Dribble", 0.15)
+    local did = emitGameAction("Dribble", Config.VimDribbleHold)
     if not vimOnlyMode() and ((not did) or Config.DoubleFire) then
         if Remotes.Action then
             local ok = fire(Remotes.Action, "Dribble", math.random(1, 3))
@@ -1375,7 +1387,7 @@ local function doTackle(targetChar)
     if not (Config.ZeroDelay and Config.TopGlobal) then
         task.wait(0.04)
     end
-    local did = emitGameAction("Tackle", 0.12)
+    local did = emitGameAction("Tackle", Config.VimTackleHold)
     if not vimOnlyMode() and ((not did) or Config.DoubleFire) then
         did = fire(Remotes.Tackle) or did
     end
@@ -1975,18 +1987,18 @@ local function combatTick()
     if Config.AutoDribble and (now - Cooldown.Dribble) > Config.DribbleCD then
         if ballDistMe <= 4.2 then
             local enemy, eDist = getClosestEnemy(Config.DribbleDist)
+            -- Em mobile a velocidade replicada do adversario pode ficar em zero;
+            -- proximidade ja e uma condicao suficiente para um tap de Q.
             if enemy and eDist <= Config.DribbleDist then
-                local eHrp = charHrp(enemy)
-                if eHrp and eHrp.Velocity.Magnitude > 6 then
-                    Cooldown.Dribble = now
-                    task.spawn(doDribble)
-                end
+                Cooldown.Dribble = now
+                task.spawn(doDribble)
             end
         end
     end
 
     -- 4) AUTO TACKLE
-    if Config.AutoTackle and (now - Cooldown.Tackle) > 0.5 then
+    local tackleCooldown = vimOnlyMode() and Config.VimTackleCooldown or 0.5
+    if Config.AutoTackle and (now - Cooldown.Tackle) > tackleCooldown then
         if ballDistMe > 2.5 then
             local enemy = getEnemyWithBall(Config.TackleDist)
             local doIt = (enemy ~= nil)
@@ -2462,7 +2474,8 @@ local function diagString()
     end
     table.insert(lines, "VIM disponivel: " .. (VIM_OK and "SIM" or "NAO")
         .. " | Ultimo input: " .. VIM_LAST_INPUT)
-    table.insert(lines, "Entrada de acao: " .. Config.VimActionMode .. " | Chute: " .. Config.VimShootInput)
+    table.insert(lines, "Entrada de acao: " .. Config.VimActionMode .. " | Chute: "
+        .. Config.VimShootInput .. " (" .. Config.VimShootPointer .. ")")
     table.insert(lines, "Chute calibrado: " .. (Config.Calibrated and ("SIM (" .. (ShootSigs[Config.ShootSig] and ShootSigs[Config.ShootSig].desc or "?") .. ")") or "NAO - nao usado no VIM somente"))
     table.insert(lines, "Motor: " .. Config.CombatHz .. "Hz | Erros contidos: " .. ErrorCount)
     return table.concat(lines, "\n")
@@ -4458,6 +4471,15 @@ else
                 end,
             })
             T:CreateDropdown({
+                Name = "Clique VIM do chute",
+                Options = { "Centro da tela", "Alvo projetado" },
+                CurrentOption = "Centro da tela",
+                Flag = "S_VimAim3",
+                Callback = function(opt)
+                    Config.VimShootPointer = normOpt(opt, "Centro da tela")
+                end,
+            })
+            T:CreateDropdown({
                 Name = "Input PC: drible",
                 Options = { "Q", "E", "R", "F", "X", "C", "Z", "Mouse1" },
                 CurrentOption = "Q",
@@ -4495,11 +4517,11 @@ else
             })
             T:CreateDropdown({
                 Name = "Input PC: passe",
-                Options = { "Mouse2", "Mouse1", "Q", "E", "R", "F", "G", "Space" },
-                CurrentOption = "Mouse2",
+                Options = { "Mouse1", "Mouse2", "Q", "E", "R", "F", "G", "Space" },
+                CurrentOption = "Mouse1",
                 Flag = "S_VimPass3",
                 Callback = function(opt)
-                    Config.VimPassInput = normOpt(opt, "Mouse2")
+                    Config.VimPassInput = normOpt(opt, "Mouse1")
                 end,
             })
             T:CreateToggle({
